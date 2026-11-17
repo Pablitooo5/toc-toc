@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toc Toc</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; font-family: -apple-system, system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  :root { --orange: #d97757; --orange-dark: #b85c3e; --ink: #1f1e1c; --u: 9px; }
+  #stage { position: fixed; inset: 0; pointer-events: none; }
+
+  /* ---------- La photo de l'écran, qui tremble à chaque coup ---------- */
+  #shot { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+  #shot.on { opacity: 1; }
+  .shake { animation: shake .32s linear; }
+  @keyframes shake {
+    0% { transform: translate(0, 0); } 15% { transform: translate(-9px, 4px); } 30% { transform: translate(8px, -5px); }
+    45% { transform: translate(-6px, 3px); } 60% { transform: translate(5px, -2px); } 75% { transform: translate(-3px, 1px); }
+    90% { transform: translate(2px, 0); } 100% { transform: translate(0, 0); }
+  }
+
+  /* Sans la photo : les bords de l'écran vibrent et s'illuminent */
+  #frame { position: absolute; inset: 0; opacity: 0; box-shadow: inset 0 0 0 6px rgba(217, 119, 87, .9), inset 0 0 70px rgba(255, 196, 92, .55); }
+  #frame.hit { animation: frameHit .34s ease-out; }
+  @keyframes frameHit { 0% { opacity: 1; transform: scale(1.004); } 30% { opacity: .9; transform: scale(.997); } 100% { opacity: 0; transform: scale(1); } }
+
+  /* ---------- La lumière de la lampe ---------- */
+  #glow { position: absolute; inset: 0; opacity: 0; transition: opacity .07s linear;
+    background: radial-gradient(circle at var(--lx, 90%) var(--ly, 45%), rgba(255, 246, 190, .85) 0, rgba(255, 226, 120, .42) 90px, rgba(255, 210, 110, .16) 300px, rgba(255, 210, 110, 0) 640px); }
+  #glow.on { opacity: 1; }
+
+  /* ---------- Le mini Claude, sur le côté droit ---------- */
+  #toc { position: absolute; right: 36px; top: 46%; transform: translateX(260px); }
+  #toc.walk { transition: transform .9s cubic-bezier(.3, .9, .4, 1); transform: translateX(0); }
+  #toc.here { transform: translateX(0); }
+  #toc.gone { transition: transform .7s ease-in; transform: translateX(300px); }
+  #toc.jolt { animation: jolt .32s linear; }
+  @keyframes jolt { 20% { translate: -5px 2px; } 45% { translate: 4px -2px; } 70% { translate: -2px 1px; } }
+
+  .body { position: relative; width: calc(var(--u) * 16); height: calc(var(--u) * 11); }
+  .char { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; shape-rendering: crispEdges;
+    filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 4px 6px rgba(0,0,0,.25)); }
+  .char .legB, .char .blink, .char .armWave, .char .armKnock { display: none; }
+  .step .char .legA { display: none; }
+  .step .char .legB { display: inline; }
+  .blinking .char .eyes { display: none; }
+  .blinking .char .blink { display: inline; }
+  .waving .char .armRest { display: none; }
+  .waving .char .armWave { display: inline; }
+  .knocking .char .armRest { display: none; }
+
+  /* La lampe, tenue à bout de bras */
+  .lamp { position: absolute; left: calc(var(--u) * 1); top: calc(var(--u) * -3.2); width: calc(var(--u) * 3); height: calc(var(--u) * 3.4);
+    background: var(--ink); border-radius: 3px 3px 2px 2px; filter: drop-shadow(0 0 1.5px #fff); }
+  .lamp::before { content: ""; position: absolute; left: 4px; right: 4px; top: 5px; bottom: 4px; background: #6b5d3a; border-radius: 2px; transition: background .07s, box-shadow .07s; }
+  .lamp::after { content: ""; position: absolute; left: 7px; right: 7px; top: -5px; height: 5px; border: 2px solid var(--ink); border-bottom: 0; border-radius: 6px 6px 0 0; }
+  .lit .lamp::before { background: #fff7c2; box-shadow: 0 0 10px 4px #ffe066, 0 0 34px 12px rgba(255, 214, 80, .8); }
+  .noLamp .lamp { display: none; }
+
+  /* Le poing qui toque contre la vitre (il vient vers toi) */
+  .fist { position: absolute; left: calc(var(--u) * 3); top: calc(var(--u) * 3.5); width: calc(var(--u) * 5); height: calc(var(--u) * 4);
+    image-rendering: pixelated; shape-rendering: crispEdges; opacity: 0; transform-origin: 50% 50%; filter: drop-shadow(0 0 1.5px #fff); }
+  .knocking .fist { opacity: 1; }
+  .fist.punch { animation: punch .3s cubic-bezier(.5, 0, .7, 1); }
+  @keyframes punch { 0% { transform: scale(.7); } 35% { transform: scale(.55) translate(6px, 2px); } 62% { transform: scale(2.1) translate(-8px, -4px); } 100% { transform: scale(.7); } }
+
+  /* La bulle de BD, à gauche du personnage */
+  .bubble { position: absolute; right: calc(100% + 14px); top: calc(var(--u) * -5); width: max-content; max-width: 300px;
+    background: #fff; border: 3.5px solid var(--ink); border-radius: 18px; padding: 10px 14px 11px; box-shadow: 4px 4px 0 var(--ink);
+    font: 800 18px/1.25 "Comic Sans MS", "Chalkboard SE", -apple-system, system-ui, sans-serif; color: #111; opacity: 0; transform-origin: 100% 70%; }
+  .bubble::after { content: ""; position: absolute; right: -15px; top: 40px; width: 18px; height: 18px; background: #fff;
+    border-right: 3.5px solid var(--ink); border-bottom: 3.5px solid var(--ink); transform: rotate(-45deg) skew(10deg, 10deg); }
+  .bubble.show { opacity: 1; animation: pop .25s cubic-bezier(.3, 1.8, .5, 1); }
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } }
+  .bubble small { display: block; font: 600 13px/1.3 -apple-system, system-ui, sans-serif; color: #666; margin-top: 4px; }
+  .bubble .t { color: var(--orange-dark); }
+
+  /* Les ondes et les « TOC » à chaque coup */
+  .ring { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 4px solid rgba(255, 255, 255, .95);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, .8); animation: ring .6s ease-out forwards; }
+  @keyframes ring { to { transform: scale(5); opacity: 0; } }
+  .word { position: absolute; font: 900 30px/1 "Comic Sans MS", "Chalkboard SE", -apple-system, sans-serif; color: #fff;
+    -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill; text-shadow: 3px 3px 0 var(--ink); animation: word .65s ease-out forwards; }
+  @keyframes word { 0% { transform: scale(.4) rotate(var(--r)); opacity: 0; } 25% { transform: scale(1.15) rotate(var(--r)); opacity: 1; } 100% { transform: translateY(-34px) scale(1) rotate(var(--r)); opacity: 0; } }
+
+  /* ---------- Aperçu navigateur (?preview) ---------- */
+  #preview { display: none; }
+  body.preview { background: #e9e6df; }
+  body.preview #preview { display: block; position: fixed; inset: 0; padding: 40px 6vw 0; font: 16px/1.6 -apple-system, system-ui, sans-serif; color: #333; }
+  #preview button { font: 700 15px -apple-system, system-ui, sans-serif; padding: 11px 16px; border-radius: 10px; border: 0; background: #1f1e1c; color: #fff; cursor: pointer; margin: 10px 8px 0 0; }
+  #desk { margin-top: 26px; width: min(560px, 60vw); height: 300px; background: #fff; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); overflow: hidden; }
+  #desk .bar { height: 34px; background: #f1efe9; border-bottom: 1px solid #e2ded5; }
+  #desk .vid { margin: 22px; height: 200px; border-radius: 8px; background: linear-gradient(135deg, #2b2b2b, #4a4a4a); display: grid; place-items: center; color: #fff; font: 700 15px -apple-system, sans-serif; }
+</style>
+</head>
+<body>
+<div id="preview">
+  <p><b>Toc Toc</b>, démo. Claude t'a répondu, et personne n'a touché l'ordinateur depuis une minute : le mini Claude arrive sur le côté, fait des signaux avec sa lampe, puis toque à la vitre. Au bout de 2 minutes, il arrête de toquer et ne garde que sa lampe, jusqu'à ce que tu bouges la souris.</p>
+  <button id="b1">▶ Lancer</button><button id="b2">🖱 Je bouge la souris</button>
+  <div id="desk"><div class="bar"></div><div class="vid">▶ Une vidéo YouTube…</div></div>
+</div>
+
+<div id="stage">
+  <img id="shot" alt="">
+  <div id="frame"></div>
+  <div id="glow"></div>
+  <div id="toc" class="noLamp">
+    <div class="bubble"></div>
+    <div class="body">
+      <div class="lamp"></div>
+      <svg class="char" viewBox="0 0 16 11">
+        <!-- bras gauche levé : il tient la lampe -->
+        <rect x="2" y="0" width="1" height="5" fill="var(--orange)"/>
+        <!-- bras droit : au repos / qui fait coucou -->
+        <rect class="armRest" x="13" y="4" width="2" height="1" fill="var(--orange)"/>
+        <g class="armWave"><rect x="13" y="1" width="1" height="4" fill="var(--orange)"/><rect x="14" y="0" width="1" height="2" fill="var(--orange)"/></g>
+        <!-- corps -->
+        <rect x="3" y="2" width="10" height="6" fill="var(--orange)"/>
+        <rect x="3" y="7" width="10" height="1" fill="var(--orange-dark)"/>
+        <!-- yeux -->
+        <g class="eyes"><rect x="5" y="3" width="1" height="2" fill="#111"/><rect x="10" y="3" width="1" height="2" fill="#111"/></g>
+        <g class="blink"><rect x="5" y="4" width="1" height="1" fill="#111"/><rect x="10" y="4" width="1" height="1" fill="#111"/></g>
+        <!-- pattes -->
+        <g class="legA">
+          <rect x="4" y="8" width="1" height="3" fill="var(--orange)"/><rect x="6" y="8" width="1" height="3" fill="var(--orange)"/>
+          <rect x="9" y="8" width="1" height="3" fill="var(--orange)"/><rect x="11" y="8" width="1" height="3" fill="var(--orange)"/>
+        </g>
+        <g class="legB">
+          <rect x="4" y="8" width="1" height="2" fill="var(--orange)"/><rect x="6" y="8" width="1" height="3" fill="var(--orange)"/>
+          <rect x="9" y="8" width="1" height="2" fill="var(--orange)"/><rect x="11" y="8" width="1" height="3" fill="var(--orange)"/>
+        </g>
+      </svg>
+      <svg class="fist" viewBox="0 0 5 4">
+        <rect x="0" y="0" width="5" height="4" fill="var(--orange)"/>
+        <rect x="0" y="3" width="5" height="1" fill="var(--orange-dark)"/>
+        <rect x="1" y="0" width=".2" height="2.4" fill="var(--orange-dark)"/><rect x="2.4" y="0" width=".2" height="2.4" fill="var(--orange-dark)"/><rect x="3.8" y="0" width=".2" height="2.4" fill="var(--orange-dark)"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const toc = $('#toc'), bubble = toc.querySelector('.bubble'), fist = toc.querySelector('.fist');
+  const shot = $('#shot'), frame = $('#frame'), glow = $('#glow'), stage = $('#stage');
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.toc;
+  const post = (type, value) => { try { if (bridge) bridge.postMessage({ type, value: String(value ?? '') }); } catch (e) {} };
+  const preview = location.search.includes('preview');
+  // Durée des coups avant qu'il ne garde que la lampe : 2 min (?toquer=10 pour 10 s, en aperçu)
+  const KNOCK_MS = (Number(new URLSearchParams(location.search).get('toquer')) || 120) * 1000;
+
+  // ---- Son (dans l'app : fichiers .wav joués par macOS ; en aperçu : synthèse, si ?son) ----
+  let ctx = null;
+  function webKnock() {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.setValueAtTime(240, t); o.frequency.exponentialRampToValueAtTime(150, t + .08);
+      g.gain.setValueAtTime(.5, t); g.gain.exponentialRampToValueAtTime(.0001, t + .12);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + .14);
+    } catch (e) {}
+  }
+  const sfx = (name) => (bridge ? post('sfx', name) : (location.search.includes('son') && name === 'knock' && webKnock()));
+
+  // ---- État ----
+  let run = 0;            // change à chaque nouveau passage : les boucles en cours s'arrêtent
+  let phase = 'idle';
+  let info = { title: '', others: 0, since: Date.now() };
+  let shotWaiter = null;
+  const setPhase = (p) => { phase = p; post('phase', p); };
+  const alive = (r) => r === run;
+
+  function say(html) {
+    bubble.classList.remove('show');
+    void bubble.offsetWidth;
+    bubble.innerHTML = html;
+    bubble.classList.add('show');
+  }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function ago() {
+    const s = Math.max(1, Math.round((Date.now() - info.since) / 1000));
+    if (s < 60) return `${s} s`;
+    const m = Math.floor(s / 60);
+    return `${m} min`;
+  }
+  const othersLine = () => info.others > 0
+    ? `<small>+ ${info.others} autre${info.others > 1 ? 's' : ''} conversation${info.others > 1 ? 's' : ''} en attente</small>` : '';
+
+  function lampPos() {
+    const r = toc.querySelector('.lamp').getBoundingClientRect();
+    glow.style.setProperty('--lx', (r.left + r.width / 2) + 'px');
+    glow.style.setProperty('--ly', (r.top + r.height / 2) + 'px');
+  }
+  function light(on) {
+    toc.classList.toggle('lit', on);
+    glow.classList.toggle('on', on);
+  }
+  async function flash(r, pattern) {
+    lampPos();
+    for (const [on, off] of pattern) {
+      if (!alive(r)) return;
+      light(true); await wait(on);
+      light(false); await wait(off);
+    }
+  }
+  function blink() { toc.classList.add('blinking'); setTimeout(() => toc.classList.remove('blinking'), 150); }
+
+  // ---- Une photo fraîche de l'écran, demandée à l'app avant chaque série de coups ----
+  function needShot() {
+    if (!bridge) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      shotWaiter = resolve;
+      post('needShot');
+      setTimeout(() => { if (shotWaiter === resolve) { shotWaiter = null; resolve(null); } }, 700);
+    });
+  }
+  function setShot(data) {
+    if (data) shot.src = data;
+    const w = shotWaiter; shotWaiter = null;
+    if (w) {
+      if (!data) return w(false);
+      if (shot.complete && shot.naturalWidth && shot.src === data) return w(true);
+      shot.onload = () => w(true);
+      shot.onerror = () => w(false);
+    }
+  }
+
+  function impact() {
+    const r = fist.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const ring = document.createElement('div');
+    ring.className = 'ring'; ring.style.left = x + 'px'; ring.style.top = y + 'px';
+    stage.appendChild(ring); setTimeout(() => ring.remove(), 650);
+    const w = document.createElement('div');
+    w.className = 'word'; w.textContent = 'TOC !';
+    w.style.left = (x - 130 + Math.random() * 40) + 'px'; w.style.top = (y + 40 + Math.random() * 30) + 'px';
+    w.style.setProperty('--r', (Math.random() * 16 - 8) + 'deg');
+    stage.appendChild(w); setTimeout(() => w.remove(), 700);
+    sfx('knock');
+  }
+  function vibrate(withShot) {
+    const target = preview ? $('#desk') : (withShot ? shot : null);
+    for (const el of [target, frame, toc]) {
+      if (!el) continue;
+      const cls = el === toc ? 'jolt' : el === frame ? 'hit' : 'shake';
+      el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    }
+  }
+
+  async function knockSeries(r) {
+    const hasShot = await needShot();
+    if (!alive(r)) return;
+    if (hasShot) shot.classList.add('on');
+    for (let i = 0; i < 3; i++) {
+      if (!alive(r)) break;
+      fist.classList.remove('punch'); void fist.offsetWidth; fist.classList.add('punch');
+      await wait(190);
+      if (!alive(r)) break;
+      impact(); vibrate(hasShot);
+      await wait(150);
+    }
+    await wait(200);
+    shot.classList.remove('on');
+  }
+
+  // ---- Le passage complet ----
+  async function trigger(waited, title, others) {
+    const r = ++run;
+    info = { title: title || 'Une conversation', others: others || 0, since: Date.now() - (waited || 0) * 1000 };
+    toc.className = 'noLamp';
+    bubble.classList.remove('show');
+    void toc.offsetWidth;
+
+    // 1. Il arrive sur le côté, lampe à la main
+    setPhase('arrive');
+    toc.className = 'walk step';
+    const walk = setInterval(() => toc.classList.toggle('step'), 150);
+    await wait(900);
+    clearInterval(walk);
+    if (!alive(r)) return;
+    toc.className = 'here';
+
+    // 2. Signaux lumineux
+    setPhase('signals');
+    say('Psst ! 🔦');
+    await flash(r, [[180, 140], [180, 140], [520, 420]]);
+    if (!alive(r)) return;
+    say(`<span class="t">« ${esc(info.title)} »</span><br>t'a répondu !${othersLine()}`);
+    await flash(r, [[180, 140], [180, 140], [520, 420], [180, 140], [180, 600]]);
+    if (!alive(r)) return;
+    blink();
+
+    // 3. Il toque à la vitre pendant 2 minutes au plus (ou jusqu'à ce que tu bouges la souris)
+    setPhase('knock');
+    toc.classList.add('knocking');
+    const knockUntil = Date.now() + KNOCK_MS;
+    let n = 0;
+    while (alive(r) && Date.now() < knockUntil) {
+      const msg = n % 3 === 2
+        ? 'Bouge la souris,<br>et je m\'en vais 😉'
+        : `Toc toc !<br>Claude t'attend depuis ${ago()}.${othersLine()}`;
+      if (n === 0 || n % 3 !== 1) say(msg);
+      await knockSeries(r);
+      if (!alive(r)) return;
+      await flash(r, [[160, 120], [160, 400]]);
+      if (n % 4 === 1) blink();
+      await wait(700);
+      n++;
+    }
+    if (!alive(r)) return;
+
+    // 4. Il arrête de toquer : il reste sur le côté, et seule sa lampe clignote doucement
+    setPhase('lamp');
+    toc.classList.remove('knocking');
+    say(`Je ne toque plus.<br>Je reste là avec ma lampe 🔦${othersLine()}`);
+    let m = 0;
+    while (alive(r)) {
+      await flash(r, [[600, 500], [600, 2600]]);
+      if (!alive(r)) return;
+      if (++m % 6 === 0) {
+        blink();
+        say(`Claude t'attend depuis ${ago()}.<br>Je reste là 🔦${othersLine()}`);
+      }
+    }
+  }
+
+  // Tu as bougé : il dit au revoir et repart (il ne revient pas pour cette réponse)
+  async function userBack() {
+    if (phase === 'idle' || phase === 'leave' || phase === 'done') return;
+    const r = ++run;
+    setPhase('leave');
+    light(false);
+    shot.classList.remove('on');
+    toc.className = 'here waving';
+    say('Ah, te voilà ! 👋');
+    await wait(1300);
+    if (!alive(r)) return;
+    bubble.classList.remove('show');
+    toc.className = 'gone step waving';
+    const walk = setInterval(() => toc.classList.toggle('step'), 150);
+    await wait(750);
+    clearInterval(walk);
+    if (!alive(r)) return;
+    toc.className = 'noLamp';
+    setPhase('done');
+    phase = 'idle';
+  }
+
+  function reset() {
+    run++;
+    light(false);
+    shot.classList.remove('on');
+    bubble.classList.remove('show');
+    toc.className = 'noLamp';
+    setPhase('done');
+    phase = 'idle';
+  }
+
+  window.toc = { trigger, userBack, reset, setShot, phase: () => phase };
+
+  if (preview) {
+    document.body.classList.add('preview');
+    $('#b1').onclick = () => trigger(64, 'Plan de lancement de l\'offre', 1);
+    $('#b2').onclick = () => userBack();
+    if (location.search.includes('auto')) setTimeout(() => $('#b1').click(), 300);
+  }
+})();
+</script>
+</body>
+</html>
